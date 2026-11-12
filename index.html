@@ -748,7 +748,7 @@ function contactsHTML(cs) {
     <div class="ln"><input id="c-ml-${i}" data-ck="mail" value="${esc(c.mail)}" placeholder="Mail" aria-label="Mail">${c.mail ? `<button class="copy" data-copy="${esc(c.mail)}">Copier</button>` : ""}</div>
     <div class="ln"><input id="c-tl-${i}" data-ck="tel" value="${esc(c.tel)}" placeholder="Téléphone" aria-label="Téléphone">${c.tel ? `<button class="copy" data-copy="${esc(c.tel)}">Copier</button>` : ""}</div>
     <input id="c-nt-${i}" data-ck="notes" value="${esc(c.notes)}" placeholder="Notes" aria-label="Notes">
-    <div><button class="btn small ghost" data-act="rm-contact">Retirer</button></div></div>`);
+    ${S.admin ? `<div><button class="btn small ghost" data-act="rm-contact">Retirer</button></div>` : ""}</div>`);
   return h + `</div><div style="margin-top:10px"><button class="btn small" data-act="add-contact">${ICON.plus} Ajouter un contact</button></div>`;
 }
 function histHTML(v) {
