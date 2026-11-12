@@ -649,12 +649,12 @@ function lumChip(v, short) {
 }
 function lumBoxHTML(v) {
   const L = lumState(v), lv = v.lum || {};
-  const ask = `Pour lancer la comparaison, dis à Claude : « vérifie le kit trad de ${esc(v.ville)} ».`;
+  const ask = "";
   if (L.k === "vide") return `<div class="lumbox"><span class="led"></span><div><b>Liste de matériel lumière vide</b><p>Remplis l'onglet « Matériel lumière » du Google Sheet : le voyant comparera ta liste au kit trad de la salle.</p></div></div>`;
-  if (L.k === "attente") return `<div class="lumbox"><span class="led"></span><div><b>Comparaison pas encore faite</b><p>${ask}</p></div></div>`;
+  if (L.k === "attente") return "";
   if (L.k === "ok") return `<div class="lumbox ok"><span class="led"></span><div><b>Toute ta liste est dans le kit trad de la salle</b><p>Vérifié${lv.verif ? " le " + esc(lv.verif) : ""} avec ${(S.data.materielLum || []).length} éléments de ta liste.</p></div></div>`;
   if (L.k === "revoir") return `<div class="lumbox wait"><span class="led"></span><div><b>À revérifier</b><p>Le kit trad a changé depuis la dernière comparaison${lv.verif ? " (" + esc(lv.verif) + ")" : ""}. ${ask}</p></div></div>`;
-  return `<div class="lumbox ko"><span class="led"></span><div><b>Il manque ${L.items.length} élément${L.items.length > 1 ? "s" : ""}</b><ul>${L.items.map(x => `<li>${esc(x)}</li>`).join("")}</ul><p>Vérifié${lv.verif ? " le " + esc(lv.verif) : ""}. ${ask.replace("lancer la comparaison", "refaire la comparaison")}</p></div></div>`;
+  return `<div class="lumbox ko"><span class="led"></span><div><b>Il manque ${L.items.length} élément${L.items.length > 1 ? "s" : ""}</b><ul>${L.items.map(x => `<li>${esc(x)}</li>`).join("")}</ul><p>Vérifié${lv.verif ? " le " + esc(lv.verif) : ""}. </p></div></div>`;
 }
 const FOLD_IDS = ["docs","dates", ...SECTIONS.map(s => s.id), "contacts","hist"];
 const isOpen = sid => OPEN.has(sid);
