@@ -723,10 +723,14 @@ function fieldHTML(k, l, t, val, k2, l2) {
   return `<div class="field${t === "long" ? " long" : ""}"><label for="f-${k}"><span class="dot ${s}"></span>${esc(l)}</label>
     ${t === "long" ? `<textarea id="f-${k}" data-k="${k}">${esc(val)}</textarea>` : `<textarea class="one" rows="1" id="f-${k}" data-k="${k}">${esc(val)}</textarea>`}</div>`;
 }
+// Arrivée du camion le jour du montage (quand l'onglet du planning ne la précise pas)
+const CAMION_MONTAGE = { "paris":"9h", "mulhouse":"9h" };
+const CAMION_MONTAGE_DEFAUT = "14h";
 function repsHTML(v) {
   const reps = sortedReps(v), cols = [["matin","Matin"],["am","Après-midi"],["soir","Soir"],["dem","Démontage"],["camion","Camion"]];
   let h = `<div class="scroll"><table><thead><tr><th>Jour</th><th>Repr.</th>${cols.map(c => `<th>${c[1]}</th>`).join("")}</tr></thead><tbody>`;
-  const pre = (v.preDays && v.preDays.length) ? v.preDays : (v.montage && (!reps.length || v.montage < reps[0].d) ? [{ d:v.montage, titre:"MONTAGE" }] : []);
+  const pre = ((v.preDays && v.preDays.length) ? v.preDays : (v.montage && (!reps.length || v.montage < reps[0].d) ? [{ d:v.montage, titre:"MONTAGE" }] : []))
+    .map(r => /^MONTAGE/.test(r.titre || "") && !r.camion ? { ...r, camion: CAMION_MONTAGE[pnorm(v.ville)] || CAMION_MONTAGE_DEFAUT } : r);
   const lab = t => { const x = String(t||"").toLowerCase(); return x.charAt(0).toUpperCase() + x.slice(1); };
   for (const r of pre) h += `<tr class="preday"><td class="day">${esc(fmt(r.d,{weekday:"short",day:"numeric",month:"short"}))}</td><td><span class="ptag">${esc(lab(r.titre))}</span></td>${cols.map(c => `<td class="mono">${esc(r[c[0]] || "–")}</td>`).join("")}</tr>`;
   if (!reps.length) h += `<tr><td colspan="7" class="hint">Aucune représentation dans le planning pour cette ville.</td></tr>`;
