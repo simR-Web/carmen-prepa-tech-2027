@@ -438,6 +438,42 @@ const ICON = {
   back:'<svg class="icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M10 3 5 8l5 5"/></svg>'
 };
 
+/* ---------- Lecture du planning (onglet INFOS + onglets des villes) ---------- */
+const P_MOIS = {janvier:1,fevrier:2,mars:3,avril:4,mai:5,juin:6,juillet:7,aout:8,septembre:9,octobre:10,novembre:11,decembre:12};
+const pnorm = s => String(s||"").normalize("NFD").replace(/[̀-ͯ]/g,"").toLowerCase().replace(/[^a-z0-9]+/g," ").trim();
+const pDMY = s => { const m = /(\d{1,2})\/(\d{1,2})\/(\d{4})/.exec(s||""); return m ? `${m[3]}-${m[2].padStart(2,"0")}-${m[1].padStart(2,"0")}` : ""; };
+const pLong = s => { const m = /(\d{1,2})\s+([a-zéû]+)\s+(\d{4})/i.exec(s||""); if (!m) return ""; const mo = P_MOIS[pnorm(m[2])]; return mo ? `${m[3]}-${String(mo).padStart(2,"0")}-${m[1].padStart(2,"0")}` : ""; };
+function tabDays(v) {
+  const days = {}, MOM = { "matin":"matin", "apres midi":"am", "soir":"soir" }; let cur = null, last = null;
+  for (const r of v) {
+    const a = String(r[0]||"").trim(), b = String(r[1]||"").trim(), d = pLong(b);
+    if (a && d && a === a.toUpperCase() && !/^\d/.test(a)) { cur = days[d] = { matin:"", am:"", soir:"", dem:"", camion:"" }; last = null; continue; }
+    if (!cur) continue;
+    if (!a && !b) { last = null; continue; }
+    const m = MOM[pnorm(a)]; if (m) { last = m; continue; }
+    if (/^\d{1,2}h/.test(a) && !b && last) { cur[last] = a; last = null; continue; }
+    if (/^\d{1,2}h/.test(a) && /d[ée]montage|chargement|camion/i.test(b)) { cur.dem = a; const c = /camion\D*?(\d{1,2}h\d{0,2})/i.exec(b); if (c) cur.camion = c[1]; }
+  }
+  return days;
+}
+function applyPlanning(d) {
+  const raw = d.planningRaw; if (!raw || !raw.infos) return;
+  const reps = {};
+  for (const r of raw.infos) {
+    const ville = String(r[5]||"").trim(), dd = pDMY(r[6]); if (!ville || !dd) continue;
+    const h = [r[7], r[8]].map(x => String(x||"").trim()).filter(Boolean).join(" & ");
+    (reps[pnorm(ville)] ||= []).push({ d:dd, h, matin:String(r[16]||"").trim(), am:String(r[24]||"").trim(), soir:String(r[25]||"").trim(), dem:String(r[26]||"").trim(), camion:String(r[27]||"").trim() });
+  }
+  const tabs = {}; for (const [name, v] of Object.entries(raw.tabs || {})) tabs[pnorm(name)] = v;
+  for (const v of d.venues) {
+    const n = pnorm(v.ville), list = (reps[n] || []).sort((a,b) => a.d < b.d ? -1 : 1), t = tabs[n];
+    if (t) {
+      const days = tabDays(t); list.forEach(r => { if (days[r.d]) Object.assign(r, days[r.d]); });
+    }
+    if (list.length || reps[n]) v.reps = list;
+  }
+}
+
 /* ---------- Chargement ---------- */
 async function load(first) {
   const slow = first ? setTimeout(() => { if (!S.data) { S.err = "Le serveur Google ne répond pas. Réessaie dans un instant ; si ça persiste, préviens Simon."; render(); } }, 25000) : 0;
@@ -445,6 +481,7 @@ async function load(first) {
     const d = await run("getData", S.code);
     clearTimeout(slow);
     if (!d || !d.venues) throw new Error("Le serveur a renvoyé une réponse vide (getData).");
+    try { applyPlanning(d); } catch (e) { console.warn("planning", e); }
     S.data = d; S.err = ""; S.lastLoad = Date.now();
     S.venues = new Map(d.venues.map(v => [v.id, v]));
     if (S.code && !d.admin) { S.code = ""; store.set("carmen-admin", ""); }
