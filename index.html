@@ -620,7 +620,7 @@ function cardHTML(v) {
     <div class="vmain"><div class="vcity">${esc(v.ville)}</div><div class="vsalle">${esc(v.salle || "Salle à préciser")}</div>
       <div class="vreps">${r.map(x => `<span class="rep">${esc(fmt(x.d,{weekday:"short",day:"numeric"}))} · ${esc(x.h||"?")}</span>`).join("") || `<span class="hint">Dates à préciser</span>`}</div></div>
     <div class="vside"><div class="quick">${quickDocs(v)}</div>
-      <div class="prog">${v.f.planning_valide === true ? `<span class="chip ok">Planning validé</span>` : v.f.planning_envoye === true ? `<span class="chip">Planning envoyé</span>` : ""}${warn ? `<span class="chip warn">${warn} à confirmer</span>` : ""}</div></div>
+      <div class="prog">${v.f.planning_valide === true ? `<span class="chip ok">✓ Planning validé</span>` : v.f.planning_envoye === true ? `<span class="chip ok">✓ Planning envoyé</span>` : ""}${v.f.pdf_envoye === true ? `<span class="chip ok">✓ Plan de feu envoyé${v.f.pdf_envoye_date ? " le " + esc(fmt(v.f.pdf_envoye_date,{day:"numeric",month:"short"})) : ""}</span>` : ""}${warn ? `<span class="chip warn">${warn} à confirmer</span>` : ""}</div></div>
   </div>`;
 }
 
