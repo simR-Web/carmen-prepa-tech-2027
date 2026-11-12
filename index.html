@@ -231,6 +231,8 @@ tr:last-child td{border-bottom:0}
 td.day{white-space:nowrap;font-weight:600}
 td input{width:100%;min-width:76px;border:1px solid var(--line);border-radius:6px;padding:4px 6px;background:var(--bg)}
 td input[type=date]{min-width:130px}
+.preday td{background:var(--sunk)}
+.ptag{display:inline-block;font-size:11px;font-weight:700;letter-spacing:.04em;padding:2px 8px;border-radius:999px;background:var(--t-dates);color:var(--ti-dates);white-space:nowrap}
 .repcell{color:var(--accent);font-weight:700}
 .tfoot{display:flex;gap:10px;flex-wrap:wrap;align-items:center;padding:10px 12px;border-top:1px solid var(--line)}
 .tfoot label{font-size:13px;color:var(--muted);display:flex;align-items:center;gap:8px}
@@ -448,7 +450,7 @@ function tabDays(v) {
   const days = {}, MOM = { "matin":"matin", "apres midi":"am", "soir":"soir" }; let cur = null, last = null;
   for (const r of v) {
     const a = String(r[0]||"").trim(), b = String(r[1]||"").trim(), d = pLong(b);
-    if (a && d && a === a.toUpperCase() && !/^\d/.test(a)) { cur = days[d] = { matin:"", am:"", soir:"", dem:"", camion:"" }; last = null; continue; }
+    if (a && d && a === a.toUpperCase() && !/^\d/.test(a)) { cur = days[d] = { titre:a, matin:"", am:"", soir:"", dem:"", camion:"" }; last = null; continue; }
     if (!cur) continue;
     if (!a && !b) { last = null; continue; }
     const m = MOM[pnorm(a)]; if (m) { last = m; continue; }
@@ -469,7 +471,9 @@ function applyPlanning(d) {
   for (const v of d.venues) {
     const n = pnorm(v.ville), list = (reps[n] || []).sort((a,b) => a.d < b.d ? -1 : 1), t = tabs[n];
     if (t) {
-      const days = tabDays(t); list.forEach(r => { if (days[r.d]) Object.assign(r, days[r.d]); });
+      const days = tabDays(t); list.forEach(r => { if (days[r.d]) { const { titre, ...hh } = days[r.d]; Object.assign(r, hh); } });
+      const first = list.length ? list[0].d : "9999";
+      v.preDays = Object.entries(days).filter(([dd, x]) => dd < first && !/EXPLOITATION|REPR[ÉE]SENTATION/.test(x.titre)).sort((a,b) => a[0] < b[0] ? -1 : 1).map(([dd, x]) => ({ d:dd, ...x }));
     }
     if (list.length || reps[n]) v.reps = list;
   }
@@ -720,6 +724,9 @@ function fieldHTML(k, l, t, val, k2, l2) {
 function repsHTML(v) {
   const reps = sortedReps(v), cols = [["matin","Matin"],["am","Après-midi"],["soir","Soir"],["dem","Démontage"],["camion","Camion"]];
   let h = `<div class="scroll"><table><thead><tr><th>Jour</th><th>Repr.</th>${cols.map(c => `<th>${c[1]}</th>`).join("")}</tr></thead><tbody>`;
+  const pre = (v.preDays && v.preDays.length) ? v.preDays : (v.montage && (!reps.length || v.montage < reps[0].d) ? [{ d:v.montage, titre:"MONTAGE" }] : []);
+  const lab = t => { const x = String(t||"").toLowerCase(); return x.charAt(0).toUpperCase() + x.slice(1); };
+  for (const r of pre) h += `<tr class="preday"><td class="day">${esc(fmt(r.d,{weekday:"short",day:"numeric",month:"short"}))}</td><td><span class="ptag">${esc(lab(r.titre))}</span></td>${cols.map(c => `<td class="mono">${esc(r[c[0]] || "–")}</td>`).join("")}</tr>`;
   if (!reps.length) h += `<tr><td colspan="7" class="hint">Aucune représentation dans le planning pour cette ville.</td></tr>`;
   for (const r of reps) h += `<tr><td class="day">${esc(fmt(r.d,{weekday:"short",day:"numeric",month:"short"}))}</td><td class="repcell mono">${esc(r.h||"–")}</td>${cols.map(c => `<td class="mono">${esc(r[c[0]] || "–")}</td>`).join("")}</tr>`;
   h += `</tbody></table></div><div class="tfoot"><span class="hint">${v.montage ? "Montage le " + esc(fmt(v.montage,{weekday:"long",day:"numeric",month:"long"})) + " · " : ""}Dates et horaires lus en direct dans le planning Carmen.</span>
