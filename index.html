@@ -234,6 +234,7 @@ td input[type=date]{min-width:130px}
 .preday td{background:var(--sunk)}
 .ptag{display:inline-block;font-size:11px;font-weight:700;letter-spacing:.04em;padding:2px 8px;border-radius:999px;background:var(--t-dates);color:var(--ti-dates);white-space:nowrap}
 .calc{margin-top:10px;padding:14px;border-radius:var(--r);background:var(--surface);border:1px solid var(--line);display:grid;gap:12px}
+.calc-act{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
 .calc-h{display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;align-items:baseline}
 .calc-in{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px}
 .calc-in label{display:grid;gap:4px;font-size:12px;color:var(--muted);font-weight:600}
@@ -802,7 +803,7 @@ function calcHTML(v) {
   const fmt = val("calc_fmt") || "1.7778";
   const opt = (x, l) => `<option value="${x}" ${Math.abs(parseFloat(fmt) - parseFloat(x)) < 0.001 ? "selected" : ""}>${l}</option>`;
   return `<div class="calc" data-calc>
-    <div class="calc-h"><b>Calcul de focale</b><span class="hint">${A ? "Les valeurs sont enregistrées et visibles par toute l'équipe." : "Valeurs renseignées par la régie."}</span></div>
+    <div class="calc-h"><b>Calcul de focale</b><span class="calc-act"><span class="hint">${A ? "Les valeurs sont enregistrées et visibles par toute l'équipe." : "Valeurs renseignées par la régie."}</span>${A ? `<button type="button" class="btn small" data-act="calc-reset">Réinitialiser</button>` : ""}</span></div>
     <div class="calc-in">
       <label for="calc-dist">Distance VP – toile <span><input id="calc-dist" data-k="calc_dist" type="number" inputmode="decimal" step="0.1" min="0" value="${esc(dist)}" ${ro}> m</span></label>
       <label for="calc-larg">Largeur d'image <span><input id="calc-larg" data-k="calc_larg" type="number" inputmode="decimal" step="0.1" min="0" value="${esc(val("calc_larg"))}" ${ro}> m</span></label>
@@ -912,6 +913,13 @@ document.addEventListener("click", async e => {
     case "login": S.panel = { type:"login" }; renderPanel(); $("#code-in")?.focus(); break;
     case "logout": S.code = ""; store.set("carmen-admin", ""); S.admin = false; render(); break;
     case "panel-close": S.panel = null; renderPanel(); break;
+    case "calc-reset": {
+      if (!S.admin || !v) break;
+      for (const k of ["calc_dist","calc_larg","calc_fmt","calc_min","calc_max"]) { v.f[k] = ""; queueField(id, k, ""); }
+      const box = view.querySelector("[data-calc]"); if (box) box.outerHTML = calcHTML(v);
+      toast("Calculateur réinitialisé.");
+      break;
+    }
     case "fold-all": { const open = !allOpen(); view.querySelectorAll("details.fold").forEach(d => d.open = open); break; }
     case "add-contact": { const cs = readContacts(); cs.push({ fonction:"", nom:"", mail:"", tel:"", notes:"" }); const el = view.querySelector('[data-block="contacts"]'); el.innerHTML = contactsHTML(cs); el.querySelector(`#c-fn-${cs.length-1}`)?.focus(); break; }
     case "rm-contact": t.closest("[data-contact]").remove(); queueContacts(id); break;
