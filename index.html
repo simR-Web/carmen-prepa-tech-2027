@@ -411,7 +411,7 @@ const UNSURE = /\?|à confirmer|a confirmer|à voir|en attente|à discuter|à pr
 const S = { data:null, venues:new Map(), route:null, code:"", admin:false, who:"", err:"", ask:null, panel:null, lastLoad:0 };
 const store = { get(k) { try { return localStorage.getItem(k); } catch { return null; } }, set(k, v) { try { localStorage.setItem(k, v); } catch {} } };
 S.code = store.get("carmen-admin") || ""; S.who = store.get("carmen-who") || "";
-let OPEN = new Set(); try { OPEN = new Set(JSON.parse(store.get("carmen-open") || "[]")); } catch {}
+let OPEN = new Set(); let OPEN_FOR = null; // rubriques ouvertes, remises à zéro à chaque ouverture de lieu
 
 const $ = s => document.querySelector(s);
 const view = $("#view");
@@ -578,6 +578,7 @@ window.addEventListener("hashchange", () => { const r = routeFromHash(); if (r !
 function render() {
   renderRole(); renderPanel();
   if (!S.data) { view.innerHTML = S.err ? `<div class="empty"><strong>Impossible de charger la tournée</strong>${esc(S.err)}<div style="margin-top:12px"><button class="btn" data-act="reload">Réessayer</button></div></div>` : `<div class="empty"><strong>Chargement de la tournée…</strong>Les dates et les fiches lieux arrivent.</div>`; return; }
+  if (S.route !== OPEN_FOR) { OPEN = new Set(); OPEN_FOR = S.route; }
   if (S.route && S.venues.get(S.route)) view.innerHTML = detailHTML(S.route, S.venues.get(S.route));
   else { S.route = null; view.innerHTML = listHTML(); }
 }
