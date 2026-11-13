@@ -170,7 +170,7 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
 
 .crew{display:flex;flex-wrap:wrap;gap:10px 24px;align-items:center;margin:4px 0 6px;padding:10px 14px;background:var(--surface);border:1px solid var(--line);border-radius:var(--r)}
 .crewsel{display:inline-flex;align-items:center;gap:10px;font-size:13px;color:var(--muted);font-weight:600}
-.crewval{font-size:14px;color:var(--ink);font-weight:700}.crewval.empty{color:var(--muted);font-weight:500}
+.crewval{font-size:14px;color:var(--ink);font-weight:700}.crewval.vide{color:var(--muted);font-weight:500}
 .crewsel select{border:1px solid var(--line);border-radius:7px;padding:6px 10px;background:var(--bg);font-size:14px;color:var(--ink);font-weight:600;min-width:120px}
 .cdw{display:flex;flex-wrap:wrap;align-items:center;gap:10px 22px;padding:2px 0}
 .cdw .tog{color:var(--ink);font-weight:600;font-size:14px}
@@ -247,6 +247,8 @@ td input[type=date]{min-width:130px}
 .calc-big b{font-size:22px;color:var(--ti-video)}
 .calc-verdict{font-weight:700;border-radius:7px;padding:8px 10px!important;border:0!important}
 .calc-verdict.ok{background:var(--ok-soft);color:var(--ok)}.calc-verdict.ko{background:var(--accent-soft);color:var(--accent)}
+.lecture .contact input[readonly]{border-color:transparent;background:transparent;padding-left:0}
+.lecture .field textarea[readonly],.lecture .field input[readonly]{border-color:transparent!important;background:transparent!important}
 .repcell{color:var(--accent);font-weight:700}
 .tfoot{display:flex;gap:10px;flex-wrap:wrap;align-items:center;padding:10px 12px;border-top:1px solid var(--line)}
 .tfoot label{font-size:13px;color:var(--muted);display:flex;align-items:center;gap:8px}
@@ -422,9 +424,10 @@ const LABEL = Object.fromEntries(ALLF.map(x => [x.k, x.l])); LABEL.notes_echange
 const KINDS = { planning:"Planning", plan_feu:"Plan de feu", calcul_video:"Calcul vidéo", fiche_tech:"Fiche technique & plans", autre:"Document" };
 const UNSURE = /\?|à confirmer|a confirmer|à voir|en attente|à discuter|à préciser|à valider/i;
 
+const LECTURE = !!window.CARMEN_LECTURE;
 const S = { data:null, venues:new Map(), route:null, code:"", admin:false, who:"", err:"", ask:null, panel:null, lastLoad:0 };
 const store = { get(k) { try { return localStorage.getItem(k); } catch { return null; } }, set(k, v) { try { localStorage.setItem(k, v); } catch {} } };
-S.code = store.get("carmen-admin") || ""; S.who = store.get("carmen-who") || "";
+S.code = LECTURE ? "" : (store.get("carmen-admin") || ""); S.who = store.get("carmen-who") || "";
 let OPEN = new Set(); let OPEN_FOR = null; // rubriques ouvertes, remises à zéro à chaque ouverture de lieu
 
 const $ = s => document.querySelector(s);
@@ -522,6 +525,7 @@ function needName(then) {
   if (S.panel?.type !== "who") { S.panel = { type:"who" }; renderPanel(); $("#who-in")?.focus(); }
 }
 function queueField(id, key, val) {
+  if (LECTURE) return;
   const k = id + "|" + key;
   clearTimeout(Q[k]); saveState("Modification…");
   Q[k] = setTimeout(() => needName(async () => {
@@ -536,6 +540,7 @@ function queueField(id, key, val) {
 }
 let cT;
 function queueContacts(id) {
+  if (LECTURE) return;
   clearTimeout(cT); clearTimeout(Q["c|" + id]); saveState("Modification…");
   Q["c|" + id] = setTimeout(() => needName(async () => {
     delete Q["c|" + id]; inflight++; saveState("Enregistrement…");
@@ -553,6 +558,7 @@ function toast(t) { const el = $("#toast"); el.textContent = t; el.hidden = fals
 /* ---------- En-tête et panneaux ---------- */
 function renderRole() {
   const el = $("#role");
+  if (LECTURE) { el.innerHTML = `<span class="chip">Consultation</span>`; return; }
   let h = S.who ? `<button class="chip" data-act="who">${esc(S.who)}</button>` : "";
   h += S.admin ? `<span class="chip admin">Administrateur</span><button class="btn small ghost" data-act="logout">Quitter l'admin</button>`
                : `<button class="btn small ghost" data-act="login">Admin</button>`;
@@ -589,6 +595,12 @@ S.route = routeFromHash();
 window.addEventListener("popstate", () => { S.route = routeFromHash(); S.ask = null; render(); });
 window.addEventListener("hashchange", () => { const r = routeFromHash(); if (r !== S.route) { S.route = r; S.ask = null; render(); window.scrollTo(0, 0); } });
 
+function lockAll() {
+  if (!LECTURE) return;
+  view.querySelectorAll("input, textarea, select").forEach(el => { if (el.tagName === "SELECT" || el.type === "checkbox" || el.type === "date" || el.type === "file") el.disabled = true; else el.readOnly = true; });
+  view.querySelectorAll('[data-act="rm-contact"],[data-act="add-contact"],[data-act="up-kind"]').forEach(el => el.remove());
+}
+if (LECTURE) { document.documentElement.classList.add("lecture"); new MutationObserver(lockAll).observe(view, { childList:true, subtree:true }); }
 function render() {
   renderRole(); renderPanel();
   if (!S.data) { view.innerHTML = S.err ? `<div class="empty"><strong>Impossible de charger la tournée</strong>${esc(S.err)}<div style="margin-top:12px"><button class="btn" data-act="reload">Réessayer</button></div></div>` : `<div class="empty"><strong>Chargement de la tournée…</strong>Les dates et les fiches lieux arrivent.</div>`; return; }
@@ -612,7 +624,7 @@ function listHTML() {
     <div class="stat"><b>${all.length}</b><span>représentations</span></div>
     <div class="stat"><b>${ds.length ? esc(fmt(ds[0],{day:"numeric",month:"short"})) + " → " + esc(fmt(ds[ds.length-1],{day:"numeric",month:"short",year:"numeric"})) : "–"}</b><span>période</span></div>
     <div class="stat"><b>${next ? esc(next.ville) + " · " + esc(fmt(next.d,{day:"numeric",month:"short"})) : "–"}</b><span>prochaine représentation</span></div></div>
-  <div class="toolbar"><span class="hint">Dates à jour en direct depuis le planning. Chacun peut compléter les fiches : tout est enregistré automatiquement.</span>
+  <div class="toolbar"><span class="hint">Dates à jour en direct depuis le planning. ${LECTURE ? "Version consultation." : "Chacun peut compléter les fiches : tout est enregistré automatiquement."}</span>
     ${S.admin ? `<button class="btn" data-act="add-venue">${ICON.plus} Ajouter un lieu</button>` : ""}</div>`;
   if (S.ask === "add-venue") h += `<form class="import ask" id="venue-form"><h3>Nouveau lieu</h3><div class="confirm"><input id="nv-ville" class="folder-in" style="max-width:220px" placeholder="Ville"><input id="nv-salle" class="folder-in" style="max-width:280px" placeholder="Salle"><button class="btn primary" type="submit">Ajouter</button><button class="btn" type="button" data-act="cancel">Annuler</button></div><p class="hint">Pour qu'il ait ses dates, ajoute aussi la ville dans l'onglet INFOS du planning.</p></form>`;
   let month = ""; h += `<div>`;
@@ -704,7 +716,7 @@ function detailHTML(id, v) {
 const CREW = [["regisseur_lum","Régie lumière",["Simon","Hervé"]],["regisseur_son","Régie son",["Bruno","Elric"]]];
 function crewHTML() {
   const f = (S.venues.get(S.route) || { f:{} }).f, ADMIN = S.admin;
-  if (!ADMIN) return CREW.map(([k, l]) => `<span class="crewsel"><span>${esc(l)}</span><b class="crewval${f[k] ? "" : " empty"}">${esc(f[k] || "À définir")}</b></span>`).join("");
+  if (!ADMIN) return CREW.map(([k, l]) => `<span class="crewsel"><span>${esc(l)}</span><b class="crewval${f[k] ? "" : " vide"}">${esc(f[k] || "À définir")}</b></span>`).join("");
   return CREW.map(([k, l, opts]) => `<label class="crewsel" for="f-${k}"><span>${esc(l)}</span>
     <select id="f-${k}" data-k="${k}" ><option value="">—</option>${opts.map(o => `<option value="${esc(o)}" ${f[k] === o ? "selected" : ""}>${esc(o)}</option>`).join("")}</select></label>`).join("");
 }
@@ -777,7 +789,7 @@ function contactsHTML(cs) {
     <div class="ln"><input id="c-tl-${i}" data-ck="tel" value="${esc(c.tel)}" placeholder="Téléphone" aria-label="Téléphone">${c.tel ? `<button class="copy" data-copy="${esc(c.tel)}">Copier</button>` : ""}</div>
     <input id="c-nt-${i}" data-ck="notes" value="${esc(c.notes)}" placeholder="Notes" aria-label="Notes">
     ${S.admin ? `<div><button class="btn small ghost" data-act="rm-contact">Retirer</button></div>` : ""}</div>`);
-  return h + `</div><div style="margin-top:10px"><button class="btn small" data-act="add-contact">${ICON.plus} Ajouter un contact</button></div>`;
+  return h + `</div>${LECTURE ? "" : `<div style="margin-top:10px"><button class="btn small" data-act="add-contact">${ICON.plus} Ajouter un contact</button></div>`}`;
 }
 function histHTML(v) {
   const hs = histOf(v).slice(0, 60);
