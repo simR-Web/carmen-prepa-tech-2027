@@ -238,6 +238,7 @@ td input[type=date]{min-width:130px}
 .calc-in{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px}
 .calc-in label{display:grid;gap:4px;font-size:12px;color:var(--muted);font-weight:600}
 .calc-in label span{display:flex;align-items:center;gap:6px;color:var(--muted)}
+.calc-in input:disabled,.calc-in select:disabled{opacity:1;color:var(--ink);background:var(--sunk);cursor:default}
 .calc-in input,.calc-in select{width:100%;min-width:0;border:1px solid var(--line);border-radius:7px;padding:7px 9px;background:var(--bg);font-size:15px;color:var(--ink);font-variant-numeric:tabular-nums}
 .calc-out{display:grid;gap:6px;font-size:14px}
 .calc-out>div{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;padding:6px 0;border-top:1px solid var(--line)}
@@ -795,20 +796,27 @@ window.__ok2 = true;
 const num = x => { const m = /(\d+(?:[.,]\d+)?)/.exec(String(x || "")); return m ? parseFloat(m[1].replace(",", ".")) : NaN; };
 const f2 = x => isFinite(x) ? x.toLocaleString("fr-FR", { maximumFractionDigits: 2 }) : "–";
 function calcHTML(v) {
-  const d = num(v.f.distance_vp);
+  const f = v.f, A = S.admin, ro = A ? "" : "disabled";
+  const val = k => (f[k] ?? "") === "" ? "" : String(f[k]).replace(",", ".");
+  const dist = val("calc_dist") || (isFinite(num(f.distance_vp)) ? num(f.distance_vp) : "");
+  const fmt = val("calc_fmt") || "1.7778";
+  const opt = (x, l) => `<option value="${x}" ${Math.abs(parseFloat(fmt) - parseFloat(x)) < 0.001 ? "selected" : ""}>${l}</option>`;
   return `<div class="calc" data-calc>
-    <div class="calc-h"><b>Calcul de focale</b><span class="hint">Calcul sur place, rien n'est enregistré.</span></div>
+    <div class="calc-h"><b>Calcul de focale</b><span class="hint">${A ? "Les valeurs sont enregistrées et visibles par toute l'équipe." : "Valeurs renseignées par la régie."}</span></div>
     <div class="calc-in">
-      <label for="calc-dist">Distance VP – toile <span><input id="calc-dist" type="number" inputmode="decimal" step="0.1" min="0" value="${isFinite(d) ? d : ""}" placeholder="14,5"> m</span></label>
-      <label for="calc-larg">Largeur d'image <span><input id="calc-larg" type="number" inputmode="decimal" step="0.1" min="0" placeholder="8"> m</span></label>
-      <label for="calc-fmt">Format <select id="calc-fmt"><option value="1.7778">16:9</option><option value="1.6">16:10</option><option value="1.3333">4:3</option><option value="2.39">2,39:1</option></select></label>
-      <label for="calc-min">Optique (ratio) <span><input id="calc-min" type="number" inputmode="decimal" step="0.01" min="0" placeholder="min"> – <input id="calc-max" type="number" inputmode="decimal" step="0.01" min="0" placeholder="max"></span></label>
+      <label for="calc-dist">Distance VP – toile <span><input id="calc-dist" data-k="calc_dist" type="number" inputmode="decimal" step="0.1" min="0" value="${esc(dist)}" ${ro}> m</span></label>
+      <label for="calc-larg">Largeur d'image <span><input id="calc-larg" data-k="calc_larg" type="number" inputmode="decimal" step="0.1" min="0" value="${esc(val("calc_larg"))}" ${ro}> m</span></label>
+      <label for="calc-fmt">Format <select id="calc-fmt" data-k="calc_fmt" ${ro}>${opt("1.7778","16:9")}${opt("1.6","16:10")}${opt("1.3333","4:3")}${opt("2.39","2,39:1")}</select></label>
+      <label for="calc-min">Optique (ratio) <span><input id="calc-min" data-k="calc_min" type="number" inputmode="decimal" step="0.01" min="0" value="${esc(val("calc_min"))}" placeholder="${A ? "min" : ""}" ${ro}> – <input id="calc-max" data-k="calc_max" type="number" inputmode="decimal" step="0.01" min="0" value="${esc(val("calc_max"))}" placeholder="${A ? "max" : ""}" ${ro}></span></label>
     </div>
-    <div class="calc-out" data-calcout>${calcOut()}</div>
+    <div class="calc-out" data-calcout>${calcOut(v)}</div>
   </div>`;
 }
-function calcOut() {
-  const g = id => { const el = document.getElementById(id); return el ? parseFloat(String(el.value).replace(",", ".")) : NaN; };
+function calcOut(v) {
+  const KEY = { "calc-dist":"calc_dist", "calc-larg":"calc_larg", "calc-fmt":"calc_fmt", "calc-min":"calc_min", "calc-max":"calc_max" };
+  const g = id => { const el = document.getElementById(id); let x = el ? el.value : (v && v.f[KEY[id]]);
+    if (!el && id === "calc-dist" && (x == null || x === "") && v) x = num(v.f.distance_vp);
+    return parseFloat(String(x ?? "").replace(",", ".")); };
   const D = g("calc-dist"), L = g("calc-larg"), F = g("calc-fmt") || 1.7778, mi = g("calc-min"), ma = g("calc-max");
   const out = [];
   if (D > 0 && L > 0) {
@@ -842,10 +850,12 @@ function refresh() {
   view.querySelectorAll("[data-k]").forEach(el => {
     if (el === document.activeElement || Q[v.id + "|" + el.dataset.k]) return;
     const val = v.f[el.dataset.k];
+    if (el.closest("[data-calc]") && (val == null || val === "")) return;
     if (el.type === "checkbox") { el.checked = val === true; if (!el.dataset.fixed) el.nextSibling.textContent = val === true ? "Oui" : "Non"; }
     else if (el.value !== String(val ?? "")) { el.value = val ?? ""; grow(el); }
     setDot(el);
   });
+  const co = view.querySelector("[data-calcout]"); if (co) co.innerHTML = calcOut(v);
 }
 function setDot(el) { const d = el.closest(".field")?.querySelector(".dot"); if (d) d.className = "dot " + st(el.type === "checkbox" ? el.checked : el.value); }
 function readContacts() { return [...view.querySelectorAll("[data-contact]")].map(c => { const o = {}; c.querySelectorAll("[data-ck]").forEach(i => o[i.dataset.ck] = i.value.trim()); return o; }); }
@@ -853,7 +863,7 @@ function readContacts() { return [...view.querySelectorAll("[data-contact]")].ma
 /* ---------- Événements ---------- */
 view.addEventListener("input", e => {
   const el = e.target, id = S.route; if (!id) return;
-  if (el.id && el.id.startsWith("calc-")) { const o = view.querySelector("[data-calcout]"); if (o) o.innerHTML = calcOut(); return; }
+  if (el.id && el.id.startsWith("calc-")) { const o = view.querySelector("[data-calcout]"); if (o) o.innerHTML = calcOut(); if (S.admin && el.dataset.k) queueField(id, el.dataset.k, el.value); return; }
   if (el.dataset.k) {
     const val = el.type === "checkbox" ? el.checked : el.value;
     if (el.type === "checkbox" && !el.dataset.fixed) el.nextSibling.textContent = val ? "Oui" : "Non";
@@ -861,7 +871,7 @@ view.addEventListener("input", e => {
   } else if (el.dataset.ck) queueContacts(id);
 });
 view.addEventListener("change", async e => {
-  if (e.target.id === "calc-fmt") { const o = view.querySelector("[data-calcout]"); if (o) o.innerHTML = calcOut(); return; }
+  if (e.target.id === "calc-fmt") return;
   const el = e.target, id = S.route; if (!id || !S.admin) return;
   if (el.id === "in-ftfolder") {
     const url = el.value.trim();
