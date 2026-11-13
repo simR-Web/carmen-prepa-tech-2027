@@ -446,7 +446,7 @@ const API_URL = "https://script.google.com/macros/s/AKfycbyfaaTaZm7naT0S8yqtxz7B
 async function run(fn, ...args) {
   let res;
   try { res = await fetch(API_URL, { method:"POST", headers:{ "Content-Type":"text/plain;charset=utf-8" }, body: JSON.stringify({ fn, args }) }); }
-  catch (e) { throw new Error("Pas de connexion avec la base Google. Vérifie ton réseau."); }
+  catch (e) { const err = new Error("Pas de connexion avec la base Google. Vérifie ton réseau."); err.offline = true; throw err; }
   let j; try { j = await res.json(); } catch (e) { throw new Error("La base Google a répondu de façon inattendue (vérifie le déploiement Apps Script)."); }
   if (!j.ok) throw new Error(j.error || "Erreur inconnue");
   return j.result;
@@ -507,15 +507,62 @@ async function load(first) {
     clearTimeout(slow);
     if (!d || !d.venues) throw new Error("Le serveur a renvoyé une réponse vide (getData).");
     try { applyPlanning(d); } catch (e) { console.warn("planning", e); }
-    S.data = d; S.err = ""; S.lastLoad = Date.now();
+    outbox().forEach(op => applyOp(d, op));
+    S.data = d; S.err = ""; S.lastLoad = Date.now(); S.dataAt = Date.now(); S.offline = !navigator.onLine || outbox().length > 0;
+    saveCache(); if (outbox().length) setTimeout(flushOutbox, 300);
     S.venues = new Map(d.venues.map(v => [v.id, v]));
     if (S.code && !d.admin) { S.code = ""; store.set("carmen-admin", ""); }
     S.admin = !!d.admin;
     first ? render() : refresh();
-  } catch (e) { clearTimeout(slow); S.err = errMsg(e); if (first || !S.data) render(); }
+  } catch (e) {
+    clearTimeout(slow);
+    if (e.offline && S.data) { S.offline = true; renderRole(); return; }
+    S.err = errMsg(e); if (first || !S.data) render();
+  }
+}
+function loadFromCache() {
+  const c = readJSON(CACHE_KEY, null); if (!c || !c.data || !c.data.venues) return false;
+  const d = c.data; outbox().forEach(op => applyOp(d, op));
+  S.data = d; S.dataAt = c.at; S.venues = new Map(d.venues.map(v => [v.id, v]));
+  S.admin = !!(S.code && d.admin); S.offline = !navigator.onLine;
+  render(); return true;
 }
 setInterval(() => { if (document.visibilityState === "visible" && !busyWriting()) load(false); }, 45000);
 document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible" && Date.now() - S.lastLoad > 20000) load(false); });
+
+/* ---------- Hors ligne : copie locale des données et envois en attente ---------- */
+const CACHE_KEY = "carmen-donnees", OUTBOX_KEY = "carmen-envois";
+const readJSON = (k, d) => { try { const x = JSON.parse(store.get(k) || "null"); return x == null ? d : x; } catch { return d; } };
+const outbox = () => readJSON(OUTBOX_KEY, []);
+const setOutbox = list => store.set(OUTBOX_KEY, JSON.stringify(list));
+function applyOp(d, op) {
+  const v = (d.venues || []).find(x => x.id === op.args[0]); if (!v) return;
+  if (op.fn === "saveField") { v.f = v.f || {}; v.f[op.args[1]] = op.args[2]; }
+  if (op.fn === "saveContacts") v.contacts = op.args[1];
+}
+function saveCache() { if (!S.data) return; try { store.set(CACHE_KEY, JSON.stringify({ at: S.dataAt || Date.now(), data: S.data })); } catch {} }
+function enqueue(op) {
+  const list = outbox().filter(o => !(o.fn === op.fn && o.args[0] === op.args[0] && (op.fn === "saveContacts" || o.args[1] === op.args[1])));
+  list.push(op); setOutbox(list);
+  if (S.data) { applyOp(S.data, op); saveCache(); }
+  S.offline = true; renderRole(); saveState("Enregistré sur cet appareil");
+}
+let flushing = false;
+async function flushOutbox() {
+  if (flushing || LECTURE) return; let list = outbox(); if (!list.length) return;
+  flushing = true; let sent = 0;
+  while (list.length) {
+    const op = list[0];
+    try { await run(op.fn, ...op.args); sent++; }
+    catch (e) { if (e.offline) { S.offline = true; renderRole(); break; } toast("Modification refusée par la base : " + errMsg(e)); }
+    list = outbox().slice(1); setOutbox(list);
+  }
+  flushing = false;
+  if (!list.length && sent) { S.offline = false; toast(`${sent} modification${sent > 1 ? "s" : ""} faite${sent > 1 ? "s" : ""} hors ligne envoyée${sent > 1 ? "s" : ""}.`); load(false); }
+  renderRole();
+}
+window.addEventListener("online", () => { flushOutbox(); load(false); });
+window.addEventListener("offline", () => { S.offline = true; renderRole(); });
 
 /* ---------- Enregistrement ---------- */
 const Q = {}; let inflight = 0;
@@ -530,12 +577,15 @@ function queueField(id, key, val) {
   const k = id + "|" + key;
   clearTimeout(Q[k]); saveState("Modification…");
   Q[k] = setTimeout(() => needName(async () => {
-    delete Q[k]; inflight++; saveState("Enregistrement…");
+    delete Q[k];
+    const op = { fn:"saveField", args:[id, key, val, S.who, S.code], at: Date.now() };
+    if (!navigator.onLine || outbox().length) { enqueue(op); return; }
+    inflight++; saveState("Enregistrement…");
     try {
       await run("saveField", id, key, val, S.who, S.code);
-      const v = S.venues.get(id); if (v) v.f[key] = val;
+      const v = S.venues.get(id); if (v) v.f[key] = val; saveCache();
       saveState("Enregistré");
-    } catch (e) { toast("Pas enregistré : " + errMsg(e)); saveState(""); }
+    } catch (e) { if (e.offline) enqueue(op); else { toast("Pas enregistré : " + errMsg(e)); saveState(""); } }
     inflight--;
   }), 800);
 }
@@ -544,10 +594,12 @@ function queueContacts(id) {
   if (LECTURE) return;
   clearTimeout(cT); clearTimeout(Q["c|" + id]); saveState("Modification…");
   Q["c|" + id] = setTimeout(() => needName(async () => {
-    delete Q["c|" + id]; inflight++; saveState("Enregistrement…");
-    const list = readContacts();
-    try { await run("saveContacts", id, list, S.who); const v = S.venues.get(id); if (v) v.contacts = list; saveState("Enregistré"); }
-    catch (e) { toast("Pas enregistré : " + errMsg(e)); saveState(""); }
+    delete Q["c|" + id];
+    const list = readContacts(), op = { fn:"saveContacts", args:[id, list, S.who], at: Date.now() };
+    if (!navigator.onLine || outbox().length) { enqueue(op); return; }
+    inflight++; saveState("Enregistrement…");
+    try { await run("saveContacts", id, list, S.who); const v = S.venues.get(id); if (v) v.contacts = list; saveCache(); saveState("Enregistré"); }
+    catch (e) { if (e.offline) enqueue(op); else { toast("Pas enregistré : " + errMsg(e)); saveState(""); } }
     inflight--;
   }), 1200);
 }
@@ -559,8 +611,10 @@ function toast(t) { const el = $("#toast"); el.textContent = t; el.hidden = fals
 /* ---------- En-tête et panneaux ---------- */
 function renderRole() {
   const el = $("#role");
-  if (LECTURE) { el.innerHTML = `<span class="chip">Consultation</span>`; return; }
-  let h = S.who ? `<button class="chip" data-act="who">${esc(S.who)}</button>` : "";
+  const n = outbox().length;
+  const off = S.offline ? `<span class="chip warn" title="Les modifications sont gardées sur cet appareil et envoyées à la reconnexion">Hors ligne${S.dataAt ? " · données du " + esc(new Date(S.dataAt).toLocaleString("fr-FR",{ day:"numeric", month:"short", hour:"2-digit", minute:"2-digit" })) : ""}${n ? " · " + n + " modif. en attente" : ""}</span>` : (n ? `<span class="chip warn">${n} modif. en attente d'envoi</span>` : "");
+  if (LECTURE) { el.innerHTML = off + `<span class="chip">Consultation</span>`; return; }
+  let h = off + (S.who ? `<button class="chip" data-act="who">${esc(S.who)}</button>` : "");
   h += S.admin ? `<span class="chip admin">Administrateur</span><button class="btn small ghost" data-act="logout">Quitter l'admin</button>`
                : `<button class="btn small ghost" data-act="login">Admin</button>`;
   el.innerHTML = h;
@@ -971,7 +1025,8 @@ $("#file-up").addEventListener("change", async e => {
   await load(false); const v = S.venues.get(id); if (v) { patchBlock("tiles", tilesHTML(v)); patchBlock("docs", docsHTML(v)); }
 });
 
-render(); load(true);
+if (loadFromCache()) load(false); else { render(); load(true); }
+if ("serviceWorker" in navigator && (location.protocol === "https:" || location.hostname === "localhost")) navigator.serviceWorker.register("../sw.js", { scope: "../" }).catch(() => {});
 window.__ok3 = true;
 </script>
 
