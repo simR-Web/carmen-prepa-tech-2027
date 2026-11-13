@@ -233,6 +233,18 @@ td input{width:100%;min-width:76px;border:1px solid var(--line);border-radius:6p
 td input[type=date]{min-width:130px}
 .preday td{background:var(--sunk)}
 .ptag{display:inline-block;font-size:11px;font-weight:700;letter-spacing:.04em;padding:2px 8px;border-radius:999px;background:var(--t-dates);color:var(--ti-dates);white-space:nowrap}
+.calc{margin-top:10px;padding:14px;border-radius:var(--r);background:var(--surface);border:1px solid var(--line);display:grid;gap:12px}
+.calc-h{display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;align-items:baseline}
+.calc-in{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px}
+.calc-in label{display:grid;gap:4px;font-size:12px;color:var(--muted);font-weight:600}
+.calc-in label span{display:flex;align-items:center;gap:6px;color:var(--muted)}
+.calc-in input,.calc-in select{width:100%;min-width:0;border:1px solid var(--line);border-radius:7px;padding:7px 9px;background:var(--bg);font-size:15px;color:var(--ink);font-variant-numeric:tabular-nums}
+.calc-out{display:grid;gap:6px;font-size:14px}
+.calc-out>div{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;padding:6px 0;border-top:1px solid var(--line)}
+.calc-out span{color:var(--muted)}
+.calc-big b{font-size:22px;color:var(--ti-video)}
+.calc-verdict{font-weight:700;border-radius:7px;padding:8px 10px!important;border:0!important}
+.calc-verdict.ok{background:var(--ok-soft);color:var(--ok)}.calc-verdict.ko{background:var(--accent-soft);color:var(--accent)}
 .repcell{color:var(--accent);font-weight:700}
 .tfoot{display:flex;gap:10px;flex-wrap:wrap;align-items:center;padding:10px 12px;border-top:1px solid var(--line)}
 .tfoot label{font-size:13px;color:var(--muted);display:flex;align-items:center;gap:8px}
@@ -680,7 +692,7 @@ function detailHTML(id, v) {
     <div class="foldbar"><span class="hint">Déplie les rubriques dont tu as besoin.</span><button class="btn small ghost" data-act="fold-all">${allOpen() ? "Tout replier" : "Tout déplier"}</button></div><div class="folds">`;
   if (S.admin) h += fold("docs", "Documents", `<div class="panel" data-block="docs">${docsHTML(v)}</div>`);
   h += fold("dates", "Dates & horaires", `<div class="panel" data-block="reps">${repsHTML(v)}</div>`);
-  for (const s of SECTIONS) { let b = (s.id === "lumiere" ? `<div data-block="lumcheck">${lumBoxHTML(v)}</div>` : "") + `<div class="panel fields">`; for (const [k,l,t,k2,l2] of s.f) b += fieldHTML(k, l, t || "text", v.f[k], k2, l2); h += fold(s.id, s.t, b + `</div>`); }
+  for (const s of SECTIONS) { let b = (s.id === "lumiere" ? `<div data-block="lumcheck">${lumBoxHTML(v)}</div>` : "") + `<div class="panel fields">`; for (const [k,l,t,k2,l2] of s.f) b += fieldHTML(k, l, t || "text", v.f[k], k2, l2); h += fold(s.id, s.t, b + `</div>` + (s.id === "video" ? calcHTML(v) : "")); }
   h += fold("contacts", "Contacts du lieu", `<div data-block="contacts">${contactsHTML(v.contacts)}</div><div class="panel fields" style="margin-top:10px">${fieldHTML("notes_echanges","Notes d'échanges","long",v.f.notes_echanges)}</div>`);
   if (S.admin) h += fold("hist", "Historique des modifications", `<div class="panel" data-block="hist">${histHTML(v)}</div>`);
   h += `</div>`;
@@ -779,6 +791,44 @@ window.__ok2 = true;
 
 <script>
 "use strict";
+/* ---------- Calcul de focale vidéo (ratio de projection) ---------- */
+const num = x => { const m = /(\d+(?:[.,]\d+)?)/.exec(String(x || "")); return m ? parseFloat(m[1].replace(",", ".")) : NaN; };
+const f2 = x => isFinite(x) ? x.toLocaleString("fr-FR", { maximumFractionDigits: 2 }) : "–";
+function calcHTML(v) {
+  const d = num(v.f.distance_vp);
+  return `<div class="calc" data-calc>
+    <div class="calc-h"><b>Calcul de focale</b><span class="hint">Calcul sur place, rien n'est enregistré.</span></div>
+    <div class="calc-in">
+      <label for="calc-dist">Distance VP – toile <span><input id="calc-dist" type="number" inputmode="decimal" step="0.1" min="0" value="${isFinite(d) ? d : ""}" placeholder="14,5"> m</span></label>
+      <label for="calc-larg">Largeur d'image <span><input id="calc-larg" type="number" inputmode="decimal" step="0.1" min="0" placeholder="8"> m</span></label>
+      <label for="calc-fmt">Format <select id="calc-fmt"><option value="1.7778">16:9</option><option value="1.6">16:10</option><option value="1.3333">4:3</option><option value="2.39">2,39:1</option></select></label>
+      <label for="calc-min">Optique (ratio) <span><input id="calc-min" type="number" inputmode="decimal" step="0.01" min="0" placeholder="min"> – <input id="calc-max" type="number" inputmode="decimal" step="0.01" min="0" placeholder="max"></span></label>
+    </div>
+    <div class="calc-out" data-calcout>${calcOut()}</div>
+  </div>`;
+}
+function calcOut() {
+  const g = id => { const el = document.getElementById(id); return el ? parseFloat(String(el.value).replace(",", ".")) : NaN; };
+  const D = g("calc-dist"), L = g("calc-larg"), F = g("calc-fmt") || 1.7778, mi = g("calc-min"), ma = g("calc-max");
+  const out = [];
+  if (D > 0 && L > 0) {
+    const tr = D / L;
+    out.push(`<div class="calc-big"><span>Ratio de projection nécessaire</span><b>${f2(tr)}:1</b></div>`);
+    out.push(`<div><span>Hauteur d'image</span><b>${f2(L / F)} m</b></div>`);
+    if (mi > 0 || ma > 0) {
+      const lo = Math.min(mi || ma, ma || mi), hi = Math.max(mi || ma, ma || mi);
+      const ok = tr >= lo - 1e-9 && tr <= hi + 1e-9;
+      out.push(`<div class="calc-verdict ${ok ? "ok" : "ko"}">${ok ? "Cette optique convient" : "Cette optique ne convient pas"} (${f2(lo)}${hi !== lo ? " – " + f2(hi) : ""}:1)</div>`);
+      out.push(`<div><span>Largeur possible à ${f2(D)} m</span><b>${f2(D / hi)}${hi !== lo ? " – " + f2(D / lo) : ""} m</b></div>`);
+      out.push(`<div><span>Distance pour ${f2(L)} m de large</span><b>${f2(L * lo)}${hi !== lo ? " – " + f2(L * hi) : ""} m</b></div>`);
+    }
+  } else if (D > 0 && (mi > 0 || ma > 0)) {
+    const lo = Math.min(mi || ma, ma || mi), hi = Math.max(mi || ma, ma || mi);
+    out.push(`<div><span>Largeur d'image à ${f2(D)} m</span><b>${f2(D / hi)}${hi !== lo ? " – " + f2(D / lo) : ""} m</b></div>`);
+  } else out.push(`<div class="hint">Indique la distance et la largeur d'image voulue pour obtenir le ratio de projection (distance ÷ largeur).</div>`);
+  return out.join("");
+}
+
 /* ---------- Mise à jour ciblée ---------- */
 function patchBlock(name, html) { const el = view.querySelector(`[data-block="${name}"]`); if (el && !el.contains(document.activeElement)) el.innerHTML = html; }
 function refresh() {
@@ -803,6 +853,7 @@ function readContacts() { return [...view.querySelectorAll("[data-contact]")].ma
 /* ---------- Événements ---------- */
 view.addEventListener("input", e => {
   const el = e.target, id = S.route; if (!id) return;
+  if (el.id && el.id.startsWith("calc-")) { const o = view.querySelector("[data-calcout]"); if (o) o.innerHTML = calcOut(); return; }
   if (el.dataset.k) {
     const val = el.type === "checkbox" ? el.checked : el.value;
     if (el.type === "checkbox" && !el.dataset.fixed) el.nextSibling.textContent = val ? "Oui" : "Non";
@@ -810,6 +861,7 @@ view.addEventListener("input", e => {
   } else if (el.dataset.ck) queueContacts(id);
 });
 view.addEventListener("change", async e => {
+  if (e.target.id === "calc-fmt") { const o = view.querySelector("[data-calcout]"); if (o) o.innerHTML = calcOut(); return; }
   const el = e.target, id = S.route; if (!id || !S.admin) return;
   if (el.id === "in-ftfolder") {
     const url = el.value.trim();
