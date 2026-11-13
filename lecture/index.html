@@ -870,7 +870,7 @@ function calcHTML(v) {
   const fmt = val("calc_fmt") || "1.7778";
   const opt = (x, l) => `<option value="${x}" ${Math.abs(parseFloat(fmt) - parseFloat(x)) < 0.001 ? "selected" : ""}>${l}</option>`;
   return `<div class="calc" data-calc>
-    <div class="calc-h"><b>Calcul de focale</b><span class="calc-act"><span class="hint">${A ? "Les valeurs sont enregistrées et visibles par toute l'équipe." : "Valeurs renseignées par la régie."}</span>${A ? `<button type="button" class="btn small" data-act="calc-reset">Réinitialiser</button>` : ""}</span></div>
+    <div class="calc-h"><b>Calcul de focale</b><span class="calc-act">${A ? `<span class="hint">Les valeurs sont enregistrées et visibles par toute l'équipe.</span>` : ""}${A ? `<button type="button" class="btn small" data-act="calc-reset">Réinitialiser</button>` : ""}</span></div>
     <div class="calc-in">
       <label for="calc-dist">Distance VP – toile <span><input id="calc-dist" data-k="calc_dist" type="number" inputmode="decimal" step="0.1" min="0" value="${esc(dist)}" ${ro}> m</span></label>
       <label for="calc-larg">Largeur d'image <span><input id="calc-larg" data-k="calc_larg" type="number" inputmode="decimal" step="0.1" min="0" value="${esc(val("calc_larg"))}" ${ro}> m</span></label>
