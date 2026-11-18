@@ -341,6 +341,10 @@ td input[type=date]{min-width:130px}
 @media (prefers-reduced-motion:reduce){.busy.run .led{animation:none}}
 .toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(20px + env(safe-area-inset-bottom,0px));background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:8px;font-size:14px;z-index:20;max-width:calc(100% - 32px);box-shadow:0 6px 24px rgba(0,0,0,.18)}
 
+.ftled{width:9px;height:9px;border-radius:50%;display:inline-block;flex:none;margin-right:6px;vertical-align:middle;box-shadow:0 0 0 2px var(--surface)}
+.ftled.ok{background:#2d8a55}.ftled.ko{background:#d23b3b}
+.btn.ftnone{opacity:.75;cursor:default}
+.tl h3 .ftled{position:relative;top:-1px}
 .chip.lum{gap:6px}
 .chip.lum .led,.lumbox .led{width:9px;height:9px;border-radius:50%;background:var(--muted);flex:none;display:inline-block}
 .chip.lum.ok{background:var(--ok-soft);color:var(--ok);border-color:transparent}.chip.lum.ok .led{background:var(--ok)}
@@ -695,9 +699,23 @@ function quickDocs(v) {
     const ds = v.docs.filter(d => d.kind === k).sort((a,b) => b.at - a.at); if (!ds.length) continue;
     h += ds.length > 1 ? `<span class="btn small">${KINDS[k]} · ${ds.length}</span>` : `<a class="btn small" href="${esc(ds[0].url)}" target="_blank" rel="noopener" data-stop>${KINDS[k]} ${ICON.ext}</a>`;
   }
-  const ft = ftUrl(v); if (ft) h += `<a class="btn small" href="${esc(ft)}" target="_blank" rel="noopener" data-stop>Fiche tech ${ICON.ext}</a>`;
+  const ft = ftUrl(v);
+  h += ft ? `<a class="btn small" href="${esc(ft)}" target="_blank" rel="noopener" data-stop>${ftLed(v)}Fiche tech ${ICON.ext}</a>` : `<span class="btn small ftnone">${ftLed(v)}Fiche tech</span>`;
   return h;
 }
+// Voyant FT : "ok" (fichiers présents), "ko" (rien), "" (inconnu : dossier inaccessible ou serveur pas à jour)
+function ftState(v) {
+  const docs = v.docs.filter(d => d.kind === "fiche_tech");
+  if (isUrl(v.ftFolder)) {
+    if (Array.isArray(v.ftFiles)) {
+      const n = v.ftFiles.length + docs.length;
+      return n ? { s:"ok", t:`${n} fichier${n > 1 ? "s" : ""} : ${[...v.ftFiles, ...docs.map(d => d.name)].slice(0, 12).join(", ")}${n > 12 ? "…" : ""}` } : { s:"ko", t:"Le dossier est vide" };
+    }
+    return docs.length ? { s:"ok", t:`${docs.length} fichier${docs.length > 1 ? "s" : ""}` } : { s:"", t:"" };
+  }
+  return docs.length ? { s:"ok", t:docs.map(d => d.name).join(", ") } : { s:"ko", t:"Aucune fiche technique" };
+}
+function ftLed(v) { const x = ftState(v); return x.s ? `<span class="ftled ${x.s}" title="${esc(x.t)}" aria-label="${esc(x.s === "ok" ? "Fiche technique présente" : "Pas de fiche technique")}"></span>` : ""; }
 function ftUrl(v) { if (isUrl(v.ftFolder)) return v.ftFolder; const l = v.docs.filter(d => d.kind === "fiche_tech").sort((a,b) => b.at - a.at)[0]; return l ? l.url : ""; }
 function cardHTML(v) {
   const r = sortedReps(v), fd = v.montage || r[0]?.d;
@@ -785,7 +803,7 @@ function tilesHTML(v) {
       ${S.admin ? `<button class="btn small ghost" data-act="up-kind" data-kind="${k}">${ICON.up} Ajouter${ds.length ? " un fichier" : ""}</button>` : ""}</div>`;
   }
   const u = ftUrl(v);
-  h += `<div class="tile${u ? " has" : ""}"><div class="tl"><h3>${KINDS.fiche_tech}</h3></div>
+  h += `<div class="tile${u ? " has" : ""}"><div class="tl"><h3>${ftLed(v)}${KINDS.fiche_tech}</h3></div>
     ${u ? `<div class="tfiles"><a class="tfile first" href="${esc(u)}" target="_blank" rel="noopener"><span>Ouvrir le dossier Drive</span>${ICON.ext}</a></div>` : `<div class="none">Pas encore de dossier</div>`}
     ${S.admin ? `<input class="folder-in" id="in-ftfolder" type="url" value="${esc(v.ftFolder)}" placeholder="Colle le lien du dossier Drive" aria-label="Lien du dossier Drive">` : ""}</div>`;
   return h;
