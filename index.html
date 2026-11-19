@@ -785,7 +785,7 @@ function detailHTML(id, v) {
   if (S.admin) h += `<div class="danger-zone" data-block="del">${delHTML(v)}</div>`;
   return h;
 }
-const CREW = [["regisseur_lum","Régie lumière",["Simon","Hervé"]],["regisseur_son","Régie son",["Bruno","Elric"]]];
+const CREW = [["regisseur_lum","Régie lumière",["Simon","Hervé"]],["regisseur_son","Régie son",["Bruno","Elric","Julien"]]];
 function crewHTML() {
   const f = (S.venues.get(S.route) || { f:{} }).f, ADMIN = S.admin;
   if (!ADMIN) return CREW.map(([k, l]) => `<span class="crewsel"><span>${esc(l)}</span><b class="crewval${f[k] ? "" : " vide"}">${esc(f[k] || "À définir")}</b></span>`).join("");
